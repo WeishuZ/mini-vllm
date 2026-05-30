@@ -107,28 +107,28 @@ Static batching drains a whole batch before admitting more, leaving the
 accelerator idle as sequences finish at different times. Continuous batching
 refills the decode batch every step. Sweeping offered load to saturation:
 
-- static throughput ceiling: **749 tok/s**
-- continuous throughput ceiling: **1139 tok/s** (1.52×)
+- static throughput ceiling: **746 tok/s**
+- continuous throughput ceiling: **1139 tok/s** (1.53×)
 
 ![throughput vs load](docs/assets/throughput.png)
 
-### 3 · Time-to-first-token — **static's tail TTFT is ~77× worse**
+### 3 · Time-to-first-token — **static's tail TTFT is ~54× worse**
 
 Same Poisson sweep, restricted to the *sustainable* load range so both policies
 serve the same throughput — the difference is pure latency. Static batching makes
 an arriving request wait for the current batch to drain (head-of-line blocking),
 so its tail explodes; continuous batching admits immediately. Across the whole
-range continuous keeps **p99 TTFT under 0.7 s** while static climbs past **24 s**.
-At 6 req/s: static p99 = **24,130 ms** vs continuous **314 ms** (≈77×).
+range continuous keeps **p99 TTFT under 0.16 s** while static climbs past **10 s**.
+At 6 req/s: static p99 = **7,257 ms** vs continuous **134 ms** (≈54×).
 
 ![ttft vs load](docs/assets/latency.png)
 
-### 4 · Prefix caching — **97% less prefill, 54% lower TTFT**
+### 4 · Prefix caching — **97% less prefill, 50% lower TTFT**
 
 For a chat/RAG/agent workload where requests share an identical system prompt,
 the shared blocks are hashed and computed once. With a 512-token shared prompt
 across 64 requests: **98% block hit-rate**, **97% fewer prefill tokens computed**,
-**54% lower median TTFT**.
+**50% lower median TTFT**.
 
 ![prefix caching](docs/assets/prefix_cache.png)
 
