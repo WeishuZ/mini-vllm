@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.env
+
+# OS
+.DS_Store
+
+# Benchmark outputs are committed on purpose (docs/assets/*.png, docs/results.json)
+# so the README renders without a rerun. Everything else stays out.

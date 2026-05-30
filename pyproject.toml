@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-vllm"
+version = "0.1.0"
+description = "A from-scratch, GPU-free model of the systems core of an LLM serving engine: paged KV-cache, continuous batching, preemption, and prefix caching."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Weishu Zhang" }]
+keywords = ["llm", "inference", "serving", "vllm", "pagedattention", "kv-cache", "scheduler"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+bench = ["numpy", "matplotlib"]
+dev = ["pytest", "numpy", "matplotlib"]
+
+[project.urls]
+Homepage = "https://github.com/WeishuZ/mini-vllm"
+
+[project.scripts]
+mini-vllm-demo = "mini_vllm.demo:main"
+
+[tool.setuptools]
+packages = ["mini_vllm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
