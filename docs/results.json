@@ -1,0 +1,186 @@
+{
+  "memory": {
+    "config": {
+      "block_size": 16,
+      "num_blocks": 2048,
+      "total_slots": 32768,
+      "max_seq_len": 2048,
+      "mean_len": 240
+    },
+    "contiguous_fit": 16,
+    "paged_fit": 112,
+    "fit_speedup": 7.0,
+    "contiguous_util": 0.136,
+    "paged_util": 0.9752,
+    "contiguous_waste_frac": 0.864,
+    "paged_waste_frac": 0.0248,
+    "sweep_max_seq_len": [
+      512,
+      1024,
+      2048,
+      4096,
+      8192
+    ],
+    "sweep_contiguous_fit": [
+      64,
+      32,
+      16,
+      8,
+      4
+    ],
+    "sweep_paged_fit": [
+      121,
+      112,
+      112,
+      112,
+      112
+    ]
+  },
+  "throughput": {
+    "rates": [
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      40,
+      60,
+      80
+    ],
+    "n_requests": 300,
+    "static_tok_s": [
+      688.1,
+      736.4,
+      736.7,
+      730.9,
+      730.9,
+      726.5,
+      754.4,
+      751.1,
+      751.1
+    ],
+    "continuous_tok_s": [
+      726.9,
+      1133.3,
+      1134.0,
+      1140.5,
+      1148.2,
+      1144.2,
+      1142.0,
+      1136.0,
+      1133.6
+    ],
+    "static_ceiling_tok_s": 745.8,
+    "continuous_ceiling_tok_s": 1138.9,
+    "ceiling_speedup": 1.53
+  },
+  "latency": {
+    "rates": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "n_requests": 200,
+    "static_ttft_p50": [
+      934.5,
+      1504.4,
+      1786.4,
+      2580.8,
+      4360.0,
+      5512.7
+    ],
+    "static_ttft_p99": [
+      3056.6,
+      3400.7,
+      4276.8,
+      5212.7,
+      7257.4,
+      10141.7
+    ],
+    "continuous_ttft_p50": [
+      42.6,
+      46.1,
+      48.2,
+      52.4,
+      57.9,
+      63.3
+    ],
+    "continuous_ttft_p99": [
+      98.4,
+      101.8,
+      115.9,
+      122.6,
+      134.3,
+      157.9
+    ],
+    "static_throughput": [
+      299.3,
+      439.8,
+      572.1,
+      685.6,
+      746.6,
+      761.9
+    ],
+    "continuous_throughput": [
+      299.3,
+      446.1,
+      590.7,
+      732.7,
+      871.2,
+      1005.6
+    ],
+    "headline_rate": 6,
+    "headline_static_p99": 7257.4,
+    "headline_continuous_p99": 134.3,
+    "headline_p99_improvement": 54.1,
+    "continuous_worst_p99": 157.9,
+    "static_worst_p99": 10141.7
+  },
+  "prefix": {
+    "system_lens": [
+      128,
+      256,
+      512,
+      1024
+    ],
+    "n_requests": 64,
+    "off_prefill_tokens": [
+      8704,
+      16896,
+      33280,
+      66048
+    ],
+    "on_prefill_tokens": [
+      640,
+      768,
+      1024,
+      1536
+    ],
+    "off_ttft_p50": [
+      2271.5,
+      2796.8,
+      3780.5,
+      5506.1
+    ],
+    "on_ttft_p50": [
+      1882.5,
+      1880.6,
+      1886.7,
+      1909.1
+    ],
+    "on_hit_rate": [
+      0.984,
+      0.984,
+      0.984,
+      0.984
+    ],
+    "headline_system_len": 512,
+    "headline_hit_rate": 0.984,
+    "headline_prefill_reduction": 0.969,
+    "headline_ttft_reduction": 0.501
+  }
+}
