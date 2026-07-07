@@ -27,6 +27,7 @@ Homepage = "https://github.com/WeishuZ/mini-vllm"
 
 [project.scripts]
 mini-vllm-demo = "mini_vllm.demo:main"
+mini-vllm-trace = "mini_vllm.trace_viewer:main"
 
 [tool.setuptools]
 packages = ["mini_vllm"]

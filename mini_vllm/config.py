@@ -22,12 +22,17 @@ class CacheConfig:
         num_cpu_blocks: size of the CPU pool used for swap-based preemption.
         enable_prefix_caching: share identical leading prompt blocks across
             sequences (the page-cache analogue).
+        prefix_cache_max_blocks: maximum number of GPU blocks the prefix cache
+            may retain. ``None`` means the cache can grow to the GPU pool size;
+            active, referenced blocks are pinned and may temporarily exceed a
+            smaller budget until they become idle.
     """
 
     block_size: int = 16
     num_gpu_blocks: int = 512
     num_cpu_blocks: int = 1024
     enable_prefix_caching: bool = False
+    prefix_cache_max_blocks: int | None = None
 
     @property
     def total_gpu_slots(self) -> int:

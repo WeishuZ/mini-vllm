@@ -38,6 +38,11 @@ class StepWork:
     preempted: int = 0
     swapped_in: int = 0
     swapped_out: int = 0
+    preempted_seq_ids: List[str] = field(default_factory=list)
+    swapped_in_seq_ids: List[str] = field(default_factory=list)
+    swapped_out_seq_ids: List[str] = field(default_factory=list)
+    # (request_id, cached prompt tokens, shared physical block ids)
+    prefix_hits: List[Tuple[str, int, List[int]]] = field(default_factory=list)
 
     @property
     def num_prefill_tokens(self) -> int:
@@ -93,11 +98,13 @@ class Scheduler:
             seq.num_preemptions += 1
             self.swapped.append(seq)
             work.swapped_out += 1
+            work.swapped_out_seq_ids.append(seq.request_id)
         else:
             self.bm.free(seq)
             seq.reset_for_recompute()       # keeps generated tokens; drops KV
             self.waiting.appendleft(seq)    # re-enter at the front
             work.preempted += 1
+            work.preempted_seq_ids.append(seq.request_id)
 
     # ----------------------------------------------------------- core passes
     def _resume_swapped(self, work: StepWork) -> None:
@@ -110,6 +117,7 @@ class Scheduler:
             seq.status = SeqStatus.RUNNING
             self.running.append(seq)
             work.swapped_in += 1
+            work.swapped_in_seq_ids.append(seq.request_id)
 
     def _advance_running(self, work: StepWork, budget: int, allow_preempt: bool) -> int:
         """Advance every running sequence one step (a prefill chunk or one decode
@@ -149,15 +157,19 @@ class Scheduler:
     def _admit_waiting(self, work: StepWork, budget: int) -> int:
         watermark_blocks = int(self.cfg.watermark * self.bm.num_gpu_blocks)
         while self.waiting and len(self.running) < self.cfg.max_num_seqs:
-            if self.bm.num_free_gpu_blocks <= watermark_blocks:
+            if self.bm.num_available_gpu_blocks <= watermark_blocks:
                 break  # leave headroom for running sequences to grow
             seq = self.waiting[0]
-            self.bm.admit_prefix(seq)             # share cached prefix blocks
+            before_blocks = len(seq.block_table)
+            covered = self.bm.admit_prefix(seq)   # share cached prefix blocks
+            shared_blocks = list(seq.block_table[before_blocks:])
             need = seq.prefill_remaining
             if need <= 0:                         # whole prompt was cached
                 self.waiting.popleft()
                 seq.status = SeqStatus.RUNNING
                 self.running.append(seq)
+                if covered:
+                    work.prefix_hits.append((seq.request_id, covered, shared_blocks))
                 continue
             chunk = min(need, budget) if self.cfg.enable_chunked_prefill else need
             if chunk <= 0 or chunk > budget or not self.bm.can_grow(seq, chunk):
@@ -169,6 +181,8 @@ class Scheduler:
             self.waiting.popleft()
             seq.status = SeqStatus.RUNNING
             self.running.append(seq)
+            if covered:
+                work.prefix_hits.append((seq.request_id, covered, shared_blocks))
         return budget
 
     def _admit_batch_static(self) -> None:
@@ -177,7 +191,7 @@ class Scheduler:
             seq = self.waiting[0]
             worst_case_tokens = seq.prompt_len + seq.max_tokens
             blocks_needed = cdiv(worst_case_tokens, self.bm.block_size)
-            if blocks_needed > self.bm.num_free_gpu_blocks:
+            if blocks_needed > self.bm.num_available_gpu_blocks:
                 break
             self.waiting.popleft()
             self.bm.grow(seq, worst_case_tokens)  # pre-reserve; never grows again

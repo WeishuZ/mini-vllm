@@ -138,13 +138,16 @@ across 64 requests: **98% block hit-rate**, **97% fewer prefill tokens computed*
 
 ```bash
 git clone https://github.com/WeishuZ/mini-vllm.git && cd mini-vllm
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"        # core has zero deps; [dev] adds pytest + plotting
 
-python -m mini_vllm.demo       # watch continuous batching + preemption live
-pytest -q                      # 16 tests: block manager, scheduler, engine
-python benchmarks/run_all.py   # regenerate every plot + docs/results.json
+make setup                     # create .venv and install dev dependencies
+make test                      # 22 tests: block manager, scheduler, engine, trace
+make demo                      # watch continuous batching + preemption live
+make trace                     # write docs/trace.html
+make bench                     # regenerate every plot + docs/results.json
 ```
+
+Without `make`, run the same commands with `.venv/bin/python -m ...`; the core
+package has zero runtime dependencies, while `[dev]` adds pytest and plotting.
 
 Minimal API:
 
@@ -152,7 +155,8 @@ Minimal API:
 from mini_vllm import LLMEngine, CacheConfig, SchedulerConfig, ModelConfig, workloads
 
 engine = LLMEngine(
-    CacheConfig(block_size=16, num_gpu_blocks=600, enable_prefix_caching=True),
+    CacheConfig(block_size=16, num_gpu_blocks=600, enable_prefix_caching=True,
+                prefix_cache_max_blocks=300),
     SchedulerConfig(policy="continuous", max_num_seqs=128,
                     max_num_batched_tokens=2048, preemption_mode="recompute"),
     ModelConfig(),
@@ -161,6 +165,35 @@ engine.add_requests(workloads.poisson(n=300, rate_rps=20, prompt_mean=256, gen_m
 print(engine.run().summary())
 ```
 
+## Learning path
+
+This repository is meant to be used as a teaching instrument, not just a code
+sample. Start with the staged guide, then work through the labs:
+
+- [`docs/learning-path.md`](docs/learning-path.md) — stage-by-stage curriculum.
+- [`docs/labs/`](docs/labs/) — hands-on exercises for token accounting, paged
+  KV, continuous batching, preemption, prefix caching, and benchmarking.
+- [`docs/vllm-mapping.md`](docs/vllm-mapping.md) — how the mini-vLLM classes map
+  to real vLLM concepts.
+- [`docs/real-vllm-runbook.md`](docs/real-vllm-runbook.md) — final bridge to a
+  real OpenAI-compatible vLLM server.
+
+## Interactive trace viewer
+
+For a portfolio-friendly walkthrough of the serving loop, generate the
+standalone trace page:
+
+```bash
+make trace
+```
+
+The page embeds one deterministic run and lets you scrub through each scheduler
+step: waiting/running/swapped/finished queues, token-budget usage, GPU KV-block
+occupancy, recompute preemptions, swap events, prefix-cache block hits, cache
+evictions, and saved prefill tokens. It has no runtime dependencies and can be
+opened directly from
+[`docs/trace.html`](docs/trace.html).
+
 ---
 
 ## Design notes
@@ -168,8 +201,11 @@ print(engine.run().summary())
 - **Block manager.** Fixed-size blocks in a ref-counted pool. Sequences grow by
   demand-paging blocks as tokens are computed; the only waste is the partial
   tail block. Prefix caching publishes completed *prompt* blocks to a content-
-  hash table (a block's hash includes its whole prefix, vLLM-style) so concurrent
-  sequences share them; a write to a shared partial block triggers copy-on-write.
+  hash table (a block's hash includes its whole prefix, vLLM-style). Cached
+  blocks are ref-counted/pinned while active, then stay resident after the last
+  sequence frees them; an LRU evictor reclaims idle cached blocks when the cache
+  exceeds `prefix_cache_max_blocks` or when allocation pressure needs space. A
+  write to a shared partial block triggers copy-on-write.
 - **Scheduler.** Continuous batching advances in-flight decodes first, then
   admits new prefills with the leftover token budget — but only above a memory
   **watermark** and only when nothing was preempted this step. Those two guards
@@ -186,11 +222,13 @@ print(engine.run().summary())
 This is a learning instrument, not a serving framework. **The compute is
 simulated** — there are no real weights, kernels, or generated-text correctness;
 the contribution is the memory/scheduling control plane and the measurement of
-its behavior. The prefix cache shares blocks among *concurrent* sequences but
-does not yet keep a freed-block evictor for cross-request reuse over time;
-swap-based preemption is enabled only without prefix caching (so every block is
-privately owned and swap is lossless). These are the natural next steps, and each
-maps to a real vLLM subsystem.
+its behavior. The prefix cache now keeps an LRU-managed resident set for
+cross-request reuse, but it is still a compact model: there is no multi-tenant
+cache partitioning, CPU/off-GPU prefix spill, or sophisticated admission policy
+for deciding which prompts deserve cache space. Swap-based preemption is enabled
+only without prefix caching (so every block is privately owned and swap is
+lossless). These are the natural next steps, and each maps to a real vLLM
+subsystem.
 
 ## Repository layout
 
@@ -202,10 +240,11 @@ mini_vllm/
   model_runner.py    simulated forward-pass cost model
   request.py         Request / Sequence token accounting
   analysis.py        contiguous-vs-paged capacity math
+  trace_viewer.py    standalone HTML trace generator
   workloads.py       deterministic burst / Poisson / shared-prefix workloads
 benchmarks/          one script per result above + run_all.py
-tests/               16 pytest unit + end-to-end tests
-docs/                generated plots + results.json
+tests/               22 pytest unit + end-to-end tests
+docs/                generated plots, trace, labs, and vLLM mapping notes
 ```
 
 ## License

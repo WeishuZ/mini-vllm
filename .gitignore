@@ -13,5 +13,8 @@ venv/
 # OS
 .DS_Store
 
+# Local scratch/scaffold output
+tmp/
+
 # Benchmark outputs are committed on purpose (docs/assets/*.png, docs/results.json)
 # so the README renders without a rerun. Everything else stays out.

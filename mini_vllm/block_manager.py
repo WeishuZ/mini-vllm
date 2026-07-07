@@ -12,6 +12,7 @@ page table                    ``Sequence.block_table`` (logical -> physical)
 demand paging                 blocks allocated as tokens are computed
 internal fragmentation        partially-filled last block
 page cache / dedup            prefix caching (shared, hashed full blocks)
+cache replacement             LRU eviction of unpinned prefix blocks
 copy-on-write                 forking a shared partial block before a write
 swapping to disk              ``swap_out`` / ``swap_in`` to the CPU pool
 ============================  ===================================
@@ -24,6 +25,7 @@ sequence.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 import hashlib
 from typing import Dict, List
 
@@ -42,6 +44,12 @@ class BlockManager:
         self.num_gpu_blocks = cfg.num_gpu_blocks
         self.num_cpu_blocks = cfg.num_cpu_blocks
         self.enable_prefix_caching = cfg.enable_prefix_caching
+        self.prefix_cache_max_blocks = (
+            cfg.prefix_cache_max_blocks
+            if cfg.prefix_cache_max_blocks is not None
+            else cfg.num_gpu_blocks
+        )
+        self.prefix_cache_max_blocks = max(0, self.prefix_cache_max_blocks)
 
         # Free pools as stacks of physical block ids.
         self._free_gpu: List[int] = list(range(self.num_gpu_blocks))
@@ -51,8 +59,11 @@ class BlockManager:
         self.ref_count: Dict[int, int] = {}
 
         # Prefix cache: hash(prefix tokens) -> physical gpu block id, and back.
+        # Idle cached blocks remain resident with ref_count == 0 until the LRU
+        # evictor reclaims them for budget or allocation pressure.
         self._hash_to_block: Dict[str, int] = {}
         self._block_to_hash: Dict[int, str] = {}
+        self._cache_lru: OrderedDict[str, int] = OrderedDict()
 
         # request_id -> list of cpu block ids, for swapped-out sequences.
         self._swapped: Dict[str, List[int]] = {}
@@ -60,6 +71,8 @@ class BlockManager:
         # metrics
         self.cache_query_blocks = 0
         self.cache_hit_blocks = 0
+        self.prefix_cache_saved_tokens = 0
+        self.prefix_cache_evictions = 0
         self.num_cow = 0
         self.peak_gpu_blocks_used = 0
 
@@ -71,6 +84,26 @@ class BlockManager:
     @property
     def num_used_gpu_blocks(self) -> int:
         return self.num_gpu_blocks - len(self._free_gpu)
+
+    @property
+    def num_prefix_cache_blocks(self) -> int:
+        return len(self._hash_to_block)
+
+    @property
+    def num_evictable_prefix_blocks(self) -> int:
+        return sum(
+            1
+            for bid in self._hash_to_block.values()
+            if self.ref_count.get(bid, 0) == 0
+        )
+
+    @property
+    def num_pinned_prefix_blocks(self) -> int:
+        return self.num_prefix_cache_blocks - self.num_evictable_prefix_blocks
+
+    @property
+    def num_available_gpu_blocks(self) -> int:
+        return self.num_free_gpu_blocks + self.num_evictable_prefix_blocks
 
     @property
     def gpu_utilization(self) -> float:
@@ -86,6 +119,8 @@ class BlockManager:
         )
 
     def _alloc_gpu(self) -> int:
+        if not self._free_gpu and not self._evict_one_prefix_block():
+            raise MemoryError("out of GPU KV blocks")
         bid = self._free_gpu.pop()
         self.ref_count[bid] = 1
         self._track_peak()
@@ -94,11 +129,37 @@ class BlockManager:
     def _decref_gpu(self, bid: int) -> None:
         self.ref_count[bid] -= 1
         if self.ref_count[bid] <= 0:
-            del self.ref_count[bid]
-            h = self._block_to_hash.pop(bid, None)
-            if h is not None and self._hash_to_block.get(h) == bid:
-                del self._hash_to_block[h]
-            self._free_gpu.append(bid)
+            if bid in self._block_to_hash:
+                # Idle prefix-cache blocks stay resident and reusable until LRU
+                # eviction or allocation pressure reclaims them.
+                self.ref_count[bid] = 0
+                self._enforce_prefix_cache_budget()
+            else:
+                del self.ref_count[bid]
+                self._free_gpu.append(bid)
+
+    def _evict_prefix_block(self, h: str) -> bool:
+        bid = self._hash_to_block.get(h)
+        if bid is None or self.ref_count.get(bid, 0) > 0:
+            return False
+        del self._hash_to_block[h]
+        self._block_to_hash.pop(bid, None)
+        self._cache_lru.pop(h, None)
+        self.ref_count.pop(bid, None)
+        self._free_gpu.append(bid)
+        self.prefix_cache_evictions += 1
+        return True
+
+    def _evict_one_prefix_block(self) -> bool:
+        for h in list(self._cache_lru.keys()):
+            if self._evict_prefix_block(h):
+                return True
+        return False
+
+    def _enforce_prefix_cache_budget(self) -> None:
+        while self.num_prefix_cache_blocks > self.prefix_cache_max_blocks:
+            if not self._evict_one_prefix_block():
+                break
 
     # --------------------------------------------------------- prefix caching
     def _block_hash(self, token_ids: List[int], end: int) -> str:
@@ -123,6 +184,7 @@ class BlockManager:
             if bid is None or bid not in self.ref_count:
                 break  # prefix sharing must be contiguous from token 0
             shared.append(bid)
+            self._cache_lru.move_to_end(h)
         return shared
 
     def _register_full_prompt_blocks(self, seq: Sequence) -> None:
@@ -141,6 +203,8 @@ class BlockManager:
             if h not in self._hash_to_block:
                 self._hash_to_block[h] = bid
                 self._block_to_hash[bid] = h
+                self._cache_lru[h] = bid
+                self._enforce_prefix_cache_budget()
 
     # ------------------------------------------------------------ allocation
     def admit_prefix(self, seq: Sequence) -> int:
@@ -154,6 +218,7 @@ class BlockManager:
             seq.block_table.append(bid)
         self.cache_hit_blocks += len(shared)
         covered = len(shared) * self.block_size
+        self.prefix_cache_saved_tokens += covered
         seq.num_computed = covered
         seq.num_cached_tokens = covered
         return covered
@@ -174,7 +239,7 @@ class BlockManager:
         return extra
 
     def can_grow(self, seq: Sequence, num_new: int) -> bool:
-        return self._extra_blocks_to_grow(seq, num_new) <= self.num_free_gpu_blocks
+        return self._extra_blocks_to_grow(seq, num_new) <= self.num_available_gpu_blocks
 
     def grow(self, seq: Sequence, num_new: int) -> None:
         """Reserve blocks so the sequence can hold ``num_new`` more computed
@@ -214,7 +279,7 @@ class BlockManager:
 
     # ----------------------------------------------------------------- swap
     def can_swap_in(self, seq: Sequence) -> bool:
-        return len(self._swapped.get(seq.request_id, [])) <= self.num_free_gpu_blocks
+        return len(self._swapped.get(seq.request_id, [])) <= self.num_available_gpu_blocks
 
     def swap_out(self, seq: Sequence) -> None:
         """Page a sequence's blocks GPU -> CPU. Assumes private blocks (the swap

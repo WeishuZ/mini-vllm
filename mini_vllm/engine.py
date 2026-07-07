@@ -71,6 +71,12 @@ class LLMEngine:
     def step(self) -> StepWork:
         work = self.scheduler.schedule()
 
+        # First admission timestamp. This is queue time, not TTFT: a sequence
+        # can spend one or more steps in prefill before it emits a token.
+        for seq in self.scheduler.running:
+            if seq.first_scheduled_time is None:
+                seq.first_scheduled_time = self.clock_ms
+
         # Apply prefill progress (KV for these tokens is now materialized).
         for seq, chunk in work.prefill:
             seq.num_computed += chunk
@@ -91,6 +97,7 @@ class LLMEngine:
 
         finished: List[Sequence] = []
         for seq in work.decode:
+            seq.decode_token_times.append(self.clock_ms)
             if seq.num_generated == 1 and seq.first_token_time is None:
                 seq.first_token_time = self.clock_ms
             if seq.is_finished:
@@ -107,6 +114,14 @@ class LLMEngine:
                 decode_seqs=work.num_decode_seqs,
                 prefill_tokens=work.num_prefill_tokens,
                 gpu_util=self.block_manager.gpu_utilization,
+                waiting=len(self.scheduler.waiting),
+                swapped=len(self.scheduler.swapped),
+                finished=len(self.completed),
+                preempted=work.preempted,
+                swapped_in=work.swapped_in,
+                swapped_out=work.swapped_out,
+                prefix_hits=len(work.prefix_hits),
+                prefix_cache_evictions=self.block_manager.prefix_cache_evictions,
             )
         )
         return work
@@ -138,11 +153,18 @@ class LLMEngine:
         m.num_requests = len(self.sequences)
         m.num_completed = len(self.completed)
         m.total_generated_tokens = self.total_decode_tokens
+        m.total_prefill_tokens = self.total_prefill_tokens
+        m.total_decode_tokens = self.total_decode_tokens
         m.makespan_ms = self.clock_ms
         m.num_steps = self.num_steps
         if self.clock_ms > 0:
             m.throughput_tok_s = self.total_decode_tokens / (self.clock_ms / 1000.0)
 
+        queues = [
+            s.first_scheduled_time - s.arrival
+            for s in self.completed
+            if s.first_scheduled_time is not None
+        ]
         ttfts = [
             s.first_token_time - s.arrival
             for s in self.completed
@@ -153,10 +175,35 @@ class LLMEngine:
             for s in self.completed
             if s.finish_time is not None
         ]
+        itls = [
+            times[i] - times[i - 1]
+            for s in self.completed
+            for times in [s.decode_token_times]
+            for i in range(1, len(times))
+        ]
+        tpots = [
+            (s.finish_time - s.first_token_time) / max(1, s.num_generated - 1)
+            for s in self.completed
+            if s.finish_time is not None
+            and s.first_token_time is not None
+            and s.num_generated > 1
+        ]
+        if queues:
+            m.queue_ms_mean = sum(queues) / len(queues)
+            m.queue_ms_p50 = percentile(queues, 50)
+            m.queue_ms_p99 = percentile(queues, 99)
         if ttfts:
             m.ttft_ms_mean = sum(ttfts) / len(ttfts)
             m.ttft_ms_p50 = percentile(ttfts, 50)
             m.ttft_ms_p99 = percentile(ttfts, 99)
+        if itls:
+            m.itl_ms_mean = sum(itls) / len(itls)
+            m.itl_ms_p50 = percentile(itls, 50)
+            m.itl_ms_p99 = percentile(itls, 99)
+        if tpots:
+            m.tpot_ms_mean = sum(tpots) / len(tpots)
+            m.tpot_ms_p50 = percentile(tpots, 50)
+            m.tpot_ms_p99 = percentile(tpots, 99)
         if e2es:
             m.e2e_ms_mean = sum(e2es) / len(e2es)
             m.e2e_ms_p50 = percentile(e2es, 50)
@@ -170,4 +217,9 @@ class LLMEngine:
             m.prefix_cache_hit_rate = (
                 self.block_manager.cache_hit_blocks / self.block_manager.cache_query_blocks
             )
+        m.prefix_cache_saved_tokens = self.block_manager.prefix_cache_saved_tokens
+        m.prefix_cache_evictions = self.block_manager.prefix_cache_evictions
+        m.prefix_cache_blocks = self.block_manager.num_prefix_cache_blocks
+        m.prefix_cache_pinned_blocks = self.block_manager.num_pinned_prefix_blocks
+        m.prefix_cache_evictable_blocks = self.block_manager.num_evictable_prefix_blocks
         return m

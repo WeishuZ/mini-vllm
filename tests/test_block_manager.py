@@ -102,3 +102,74 @@ def test_prefix_cache_partial_match():
     s2 = seq("b", 12, tokens=other)
     covered = bm.admit_prefix(s2)
     assert covered == 8                               # 2 full shared blocks
+
+
+def test_prefix_cache_survives_sequence_free():
+    cfg = CacheConfig(block_size=4, num_gpu_blocks=10, enable_prefix_caching=True)
+    bm = BlockManager(cfg)
+    toks = list(range(1, 9))                          # 2 full blocks
+    s1 = seq("a", 8, tokens=toks)
+    bm.admit_prefix(s1)
+    bm.grow(s1, 8); s1.num_computed = 8
+    bm._register_full_prompt_blocks(s1)
+
+    bm.free(s1)
+    assert bm.num_prefix_cache_blocks == 2
+    assert bm.num_evictable_prefix_blocks == 2
+    assert bm.num_free_gpu_blocks == 8                # cached blocks stay resident
+
+    s2 = seq("b", 8, tokens=toks)
+    assert bm.admit_prefix(s2) == 8
+    assert bm.prefix_cache_saved_tokens == 8
+    assert bm.num_pinned_prefix_blocks == 2
+
+
+def test_prefix_cache_lru_budget_eviction():
+    cfg = CacheConfig(
+        block_size=4,
+        num_gpu_blocks=10,
+        enable_prefix_caching=True,
+        prefix_cache_max_blocks=2,
+    )
+    bm = BlockManager(cfg)
+    a = list(range(1, 9))
+    b = list(range(101, 109))
+
+    s1 = seq("a", 8, tokens=a)
+    bm.admit_prefix(s1)
+    bm.grow(s1, 8); s1.num_computed = 8
+    bm._register_full_prompt_blocks(s1)
+    bm.free(s1)
+    assert bm.num_prefix_cache_blocks == 2
+
+    s2 = seq("b", 8, tokens=b)
+    bm.admit_prefix(s2)
+    bm.grow(s2, 8); s2.num_computed = 8
+    bm._register_full_prompt_blocks(s2)
+    bm.free(s2)
+
+    assert bm.num_prefix_cache_blocks == 2
+    assert bm.prefix_cache_evictions == 2
+    assert bm.admit_prefix(seq("a2", 8, tokens=a)) == 0
+    assert bm.admit_prefix(seq("b2", 8, tokens=b)) == 8
+
+
+def test_allocation_pressure_evicts_idle_prefix_cache():
+    cfg = CacheConfig(block_size=4, num_gpu_blocks=2, enable_prefix_caching=True)
+    bm = BlockManager(cfg)
+    toks = list(range(1, 9))
+    s1 = seq("a", 8, tokens=toks)
+    bm.admit_prefix(s1)
+    bm.grow(s1, 8); s1.num_computed = 8
+    bm._register_full_prompt_blocks(s1)
+    bm.free(s1)
+
+    assert bm.num_free_gpu_blocks == 0
+    assert bm.num_available_gpu_blocks == 2
+
+    s2 = seq("b", 0)
+    assert bm.can_grow(s2, 8)
+    bm.grow(s2, 8); s2.num_computed = 8
+    assert bm.num_prefix_cache_blocks == 0
+    assert bm.prefix_cache_evictions == 2
+    assert len(s2.block_table) == 2

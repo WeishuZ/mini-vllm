@@ -39,6 +39,21 @@ def test_continuous_beats_static_throughput():
     assert mc.ttft_ms_p99 <= ms.ttft_ms_p99
 
 
+def test_metrics_include_queue_and_inter_token_latency():
+    e = build(policy="continuous", n=8, blocks=180)
+    m = e.run()
+
+    assert m.num_completed == 8
+    assert m.total_prefill_tokens == e.total_prefill_tokens
+    assert m.total_decode_tokens == e.total_decode_tokens
+    assert m.queue_ms_p50 >= 0
+    assert m.ttft_ms_p50 >= m.queue_ms_p50
+    assert m.itl_ms_p50 > 0
+    assert m.tpot_ms_p50 > 0
+    assert all(s.first_scheduled_time is not None for s in e.completed)
+    assert all(len(s.decode_token_times) == s.max_tokens for s in e.completed)
+
+
 def test_recompute_preemption_completes_under_pressure():
     cache = CacheConfig(block_size=16, num_gpu_blocks=80)
     e = LLMEngine(cache, SchedulerConfig(preemption_mode="recompute",
@@ -77,6 +92,8 @@ def test_prefix_cache_hits_when_warmed():
                           arrival=e.clock_ms, token_ids=system + [9_999] * 8))
     m = e.run()
     assert e.block_manager.cache_hit_blocks >= 16     # B shared the 16 system blocks
+    assert m.prefix_cache_saved_tokens >= 256
+    assert m.prefix_cache_blocks >= 16
     assert m.num_completed == 2
 
 

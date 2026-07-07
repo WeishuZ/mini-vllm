@@ -54,9 +54,11 @@ class Sequence:
     num_generated: int = 0
     block_table: List[int] = field(default_factory=list)  # physical GPU block ids
 
-    # metrics (simulated-clock timestamps, seconds)
+    # metrics (simulated-clock timestamps, milliseconds)
+    first_scheduled_time: Optional[float] = None
     first_token_time: Optional[float] = None
     finish_time: Optional[float] = None
+    decode_token_times: List[float] = field(default_factory=list)
     num_cached_tokens: int = 0      # prompt tokens served from the prefix cache
     num_preemptions: int = 0
 
