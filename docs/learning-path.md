@@ -158,6 +158,7 @@ python3 -m venv .venv
 - 新增 `bench_block_size.py`, 研究 block size 对 waste 的影响。
 - 新增 `bench_watermark.py`, 研究 watermark 对 preemption 的影响。
 - 给 prefix cache 增加更细的 eviction 统计。
+- 用 `memory_estimator.py` 把真实 GPU 显存预算换算成 mini-vLLM blocks。
 
 验收:
 
@@ -178,6 +179,6 @@ python3 -m venv .venv
 
 - 能启动一个 OpenAI-compatible vLLM server。
 - 能用 OpenAI SDK 调用本地服务。
+- 能用 `examples/kv_sizing.py` 估算一个模型的 KV block budget。
 - 能解释 `max_model_len`, `gpu_memory_utilization`, `max_num_batched_tokens`,
   prefix caching, chunked prefill 和 mini-vLLM 里的哪些概念对应。
-

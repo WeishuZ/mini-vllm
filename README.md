@@ -140,7 +140,7 @@ across 64 requests: **98% block hit-rate**, **97% fewer prefill tokens computed*
 git clone https://github.com/WeishuZ/mini-vllm.git && cd mini-vllm
 
 make setup                     # create .venv and install dev dependencies
-make test                      # 22 tests: block manager, scheduler, engine, trace
+make test                      # 30 tests: cache, scheduler, engine, trace, benchmarks
 make demo                      # watch continuous batching + preemption live
 make trace                     # write docs/trace.html
 make bench                     # regenerate every plot + docs/results.json
@@ -177,6 +177,7 @@ sample. Start with the staged guide, then work through the labs:
   to real vLLM concepts.
 - [`docs/real-vllm-runbook.md`](docs/real-vllm-runbook.md) — final bridge to a
   real OpenAI-compatible vLLM server.
+- [`examples/`](examples/) — optional real-vLLM client commands and KV sizing.
 
 ## Interactive trace viewer
 
@@ -243,7 +244,8 @@ mini_vllm/
   trace_viewer.py    standalone HTML trace generator
   workloads.py       deterministic burst / Poisson / shared-prefix workloads
 benchmarks/          one script per result above + run_all.py
-tests/               22 pytest unit + end-to-end tests
+examples/            optional bridge scripts for real vLLM usage
+tests/               30 pytest unit + end-to-end tests
 docs/                generated plots, trace, labs, and vLLM mapping notes
 ```
 

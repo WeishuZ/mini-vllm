@@ -24,6 +24,11 @@ make bench
 - `docs/assets/throughput.png`
 - `docs/assets/latency.png`
 - `docs/assets/prefix_cache.png`
+- `docs/assets/block_size.png`
+- `docs/assets/watermark.png`
+- `docs/assets/chunked_prefill.png`
+- `docs/assets/preemption.png`
+- `docs/assets/cache_budget.png`
 
 ## 实验 2: 写 headline conclusion
 
@@ -33,6 +38,11 @@ make bench
 - Throughput: continuous batching 的 ceiling 为什么更高?
 - Latency: static batching 的 p99 TTFT 为什么恶化?
 - Prefix: shared prompt 下 prefill tokens 为什么减少?
+- Block size: 内部碎片如何随 block size 变化?
+- Watermark: admission headroom 如何影响 preemption?
+- Chunked prefill: prompt 长于 token budget 时为什么还能前进?
+- Preemption: recompute 和 swap 的恢复成本有何不同?
+- Cache budget: hit rate 和 eviction 如何权衡?
 
 ## 实验 3: 用 trace viewer 解释一帧
 
@@ -64,4 +74,3 @@ Prefix caching 复用共享 system prompt 的 full KV blocks,
 减少 follower requests 的 prefill tokens, 所以 TTFT 下降。
 但 decode 仍然逐 token 生成, 所以输出很长时 E2E latency 仍会受 decode 影响。
 ```
-

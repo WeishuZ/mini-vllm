@@ -10,6 +10,7 @@ def test_trace_captures_prefix_hits_and_preemptions():
     trace = build_trace(build_demo_engine(n_requests=24), max_steps=60)
 
     assert trace["frames"]
+    assert all(f["narration"] for f in trace["frames"])
     assert any(f["work"]["prefix_hits"] for f in trace["frames"])
     assert any(f["work"]["preempted"] for f in trace["frames"])
     assert trace["metadata"]["prefix_caching"] is True

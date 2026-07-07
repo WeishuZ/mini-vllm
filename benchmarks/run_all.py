@@ -14,6 +14,11 @@ import bench_latency
 import bench_memory
 import bench_prefix
 import bench_throughput
+import bench_block_size
+import bench_cache_budget
+import bench_chunked_prefill
+import bench_preemption
+import bench_watermark
 
 ASSETS = "docs/assets"
 
@@ -22,21 +27,41 @@ def main() -> None:
     os.makedirs(ASSETS, exist_ok=True)
     results = {}
 
-    print("\n[1/4] memory: paged vs contiguous")
+    print("\n[1/9] memory: paged vs contiguous")
     results["memory"] = bench_memory.run()
     bench_memory.plot(results["memory"], f"{ASSETS}/mem_capacity.png")
 
-    print("\n[2/4] throughput: continuous vs static (saturated)")
+    print("\n[2/9] throughput: continuous vs static (saturated)")
     results["throughput"] = bench_throughput.run()
     bench_throughput.plot(results["throughput"], f"{ASSETS}/throughput.png")
 
-    print("\n[3/4] latency: TTFT under Poisson load")
+    print("\n[3/9] latency: TTFT under Poisson load")
     results["latency"] = bench_latency.run()
     bench_latency.plot(results["latency"], f"{ASSETS}/latency.png")
 
-    print("\n[4/4] prefix cache: shared system prompt")
+    print("\n[4/9] prefix cache: shared system prompt")
     results["prefix"] = bench_prefix.run()
     bench_prefix.plot(results["prefix"], f"{ASSETS}/prefix_cache.png")
+
+    print("\n[5/9] block size: internal fragmentation sweep")
+    results["block_size"] = bench_block_size.run()
+    bench_block_size.plot(results["block_size"], f"{ASSETS}/block_size.png")
+
+    print("\n[6/9] watermark: admission headroom under pressure")
+    results["watermark"] = bench_watermark.run()
+    bench_watermark.plot(results["watermark"], f"{ASSETS}/watermark.png")
+
+    print("\n[7/9] chunked prefill: long prompts vs token budget")
+    results["chunked_prefill"] = bench_chunked_prefill.run()
+    bench_chunked_prefill.plot(results["chunked_prefill"], f"{ASSETS}/chunked_prefill.png")
+
+    print("\n[8/9] preemption: recompute vs swap")
+    results["preemption"] = bench_preemption.run()
+    bench_preemption.plot(results["preemption"], f"{ASSETS}/preemption.png")
+
+    print("\n[9/9] cache budget: prefix reuse vs eviction")
+    results["cache_budget"] = bench_cache_budget.run()
+    bench_cache_budget.plot(results["cache_budget"], f"{ASSETS}/cache_budget.png")
 
     with open("docs/results.json", "w") as f:
         json.dump(results, f, indent=2)
@@ -53,6 +78,11 @@ def main() -> None:
     print(f"  prefix cache:    {p['headline_prefill_reduction']*100:.0f}% less prefill, "
           f"{p['headline_ttft_reduction']*100:.0f}% lower TTFT "
           f"({p['headline_hit_rate']*100:.0f}% block hit-rate)")
+    print(f"  block size:      lowest waste {results['block_size']['lowest_waste_fraction']*100:.1f}%")
+    print(f"  watermark:       fewest preemptions at {results['watermark']['best_by_preemptions']*100:.0f}%")
+    print(f"  chunked prefill: completed {results['chunked_prefill']['chunked_completed'][-1]}/"
+          f"{results['chunked_prefill']['unchunked_completed'][-1]} requests at longest prompt")
+    print(f"  cache budget:    max hit-rate {max(results['cache_budget']['hit_rate'])*100:.0f}%")
     print("  wrote docs/results.json and docs/assets/*.png")
 
 

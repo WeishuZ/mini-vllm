@@ -9,6 +9,13 @@ from .analysis import contiguous_capacity, paged_capacity
 from .block_manager import BlockManager, cdiv
 from .config import CacheConfig, ModelConfig, SchedulerConfig
 from .engine import LLMEngine
+from .memory_estimator import (
+    KVCacheEstimate,
+    ModelMemorySpec,
+    ServingMemoryBudget,
+    dtype_size_bytes,
+    estimate_kv_cache_blocks,
+)
 from .metrics import EngineMetrics
 from .model_runner import ModelRunner
 from .request import Request, Sequence, SeqStatus
@@ -32,4 +39,9 @@ __all__ = [
     "EngineMetrics",
     "contiguous_capacity",
     "paged_capacity",
+    "ModelMemorySpec",
+    "ServingMemoryBudget",
+    "KVCacheEstimate",
+    "dtype_size_bytes",
+    "estimate_kv_cache_blocks",
 ]

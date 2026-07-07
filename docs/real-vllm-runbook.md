@@ -66,6 +66,24 @@ print(resp.choices[0].message.content)
 | preemption | `preemption_mode` | KV 压力下释放或迁移 sequence state。 |
 | metrics endpoint | `EngineMetrics` | 观察 TTFT、ITL、throughput、KV cache usage。 |
 
+## 4.1 KV cache 粗估
+
+可以用 mini-vLLM 的估算器把真实模型/GPU 预算换成 block 数:
+
+```bash
+.venv/bin/python examples/kv_sizing.py
+```
+
+核心公式:
+
+```text
+KV bytes/token/GPU =
+  2 * layers * kv_heads_per_gpu * head_dim * dtype_bytes
+```
+
+它不是真实 vLLM 的精确容量规划器, 但足够帮助你理解
+`gpu_memory_utilization`, `max_model_len`, tensor parallel 和 KV blocks 的关系。
+
 ## 5. Benchmark checklist
 
 每次 benchmark 至少记录:
@@ -137,4 +155,3 @@ KV cache 压力高:
 - block waste 疑问: 跑 `bench_memory.py`, 改 `block_size` 和长度分布。
 
 这个 loop 是 mini-vLLM 作为教具最有价值的地方: 用小模型解释真实系统的大现象。
-

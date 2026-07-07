@@ -170,6 +170,34 @@ def _work_dict(work: Optional[StepWork]) -> Dict:
     }
 
 
+def _narration(work: Optional[StepWork]) -> str:
+    if work is None or work.is_empty:
+        return "No token work was scheduled in this frame."
+    if work.preempted_seq_ids:
+        return (
+            "KV pressure forced recompute preemption: the listed sequences lost "
+            "their resident KV blocks and will re-enter the waiting queue."
+        )
+    if work.swapped_out_seq_ids:
+        return (
+            "KV pressure forced swap preemption: the listed sequences moved "
+            "their KV blocks to the CPU pool so GPU blocks could be reused."
+        )
+    if work.prefix_hits:
+        return (
+            "A request reused cached prefix blocks, so those prompt tokens did "
+            "not need fresh prefill compute."
+        )
+    if work.prefill and work.decode:
+        return (
+            "This is continuous batching in action: existing requests decode "
+            "while newly admitted requests consume the remaining prefill budget."
+        )
+    if work.prefill:
+        return "The scheduler is materializing prompt KV blocks during prefill."
+    return "The batch is in decode: each running sequence emits one token."
+
+
 def _frame(engine: LLMEngine, work: Optional[StepWork]) -> Dict:
     pending = sorted(engine._pending, key=_seq_sort_key)
     completed = sorted(engine.completed, key=_seq_sort_key)
@@ -189,6 +217,7 @@ def _frame(engine: LLMEngine, work: Optional[StepWork]) -> Dict:
         "gpu_total_blocks": engine.block_manager.num_gpu_blocks,
         "gpu_util": round(engine.block_manager.gpu_utilization, 4),
         "cache_hit_rate": round(engine.metrics().prefix_cache_hit_rate, 4),
+        "narration": _narration(work),
         "work": _work_dict(work),
         "requests": _sequence_rows(engine),
         "blocks": _block_rows(engine),
@@ -805,7 +834,7 @@ function renderQueues(frame) {
 
 function renderEvents(frame) {
   const w = frame.work;
-  const rows = [];
+  const rows = [["what happened", frame.narration]];
   if (w.prefill.length) rows.push(["prefill", w.prefill.map(x => `${x.id} +${x.tokens}`).join(", ")]);
   if (w.decode.length) rows.push(["decode", `${w.decode.length} seqs: ${w.decode.slice(0, 18).join(", ")}${w.decode.length > 18 ? ", ..." : ""}`]);
   if (w.preempted.length) rows.push(["recompute", w.preempted.join(", ")]);

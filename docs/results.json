@@ -182,5 +182,187 @@
     "headline_hit_rate": 0.984,
     "headline_prefill_reduction": 0.969,
     "headline_ttft_reduction": 0.501
+  },
+  "block_size": {
+    "block_sizes": [
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "fit": [
+      111,
+      110,
+      110,
+      108,
+      101
+    ],
+    "utilization": [
+      0.9949,
+      0.9876,
+      0.9739,
+      0.9488,
+      0.9013
+    ],
+    "waste_fraction": [
+      0.0051,
+      0.0124,
+      0.0261,
+      0.0512,
+      0.0987
+    ],
+    "best_fit": 111,
+    "lowest_waste_fraction": 0.0051
+  },
+  "watermark": {
+    "watermarks": [
+      0.0,
+      0.02,
+      0.04,
+      0.08,
+      0.12
+    ],
+    "preemptions": [
+      23,
+      23,
+      23,
+      16,
+      13
+    ],
+    "throughput": [
+      617.2,
+      617.2,
+      617.2,
+      634.8,
+      628.3
+    ],
+    "ttft_p99": [
+      7397.3,
+      7397.3,
+      7397.3,
+      7083.2,
+      7174.3
+    ],
+    "completed": [
+      48,
+      48,
+      48,
+      48,
+      48
+    ],
+    "best_by_preemptions": 0.12
+  },
+  "chunked_prefill": {
+    "prompt_lens": [
+      256,
+      512,
+      1024
+    ],
+    "token_budget": 512,
+    "chunked_completed": [
+      36,
+      36,
+      36
+    ],
+    "unchunked_completed": [
+      36,
+      36,
+      0
+    ],
+    "chunked_ttft_p50": [
+      428.1,
+      972.3,
+      2978.4
+    ],
+    "unchunked_ttft_p50": [
+      428.1,
+      972.3,
+      0.0
+    ],
+    "chunked_throughput": [
+      884.1,
+      647.2,
+      338.5
+    ],
+    "unchunked_throughput": [
+      884.1,
+      647.2,
+      0.0
+    ]
+  },
+  "preemption": {
+    "modes": [
+      "recompute",
+      "swap"
+    ],
+    "completed": [
+      30,
+      30
+    ],
+    "throughput": [
+      577.4,
+      609.5
+    ],
+    "ttft_p99": [
+      3636.6,
+      3462.3
+    ],
+    "preemptions": [
+      14,
+      0
+    ],
+    "swaps": [
+      0,
+      17
+    ],
+    "prefill_tokens": [
+      6006,
+      4096
+    ]
+  },
+  "cache_budget": {
+    "cache_budgets": [
+      0,
+      16,
+      32,
+      64,
+      256
+    ],
+    "hit_rate": [
+      0.0,
+      0.0,
+      0.979,
+      0.979,
+      0.979
+    ],
+    "saved_tokens": [
+      0,
+      0,
+      24064,
+      24064,
+      24064
+    ],
+    "evictions": [
+      1536,
+      1520,
+      0,
+      0,
+      0
+    ],
+    "ttft_p50": [
+      59.3,
+      59.3,
+      8.1,
+      8.1,
+      8.1
+    ],
+    "cache_blocks": [
+      0,
+      16,
+      32,
+      32,
+      32
+    ]
   }
 }
